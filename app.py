@@ -1,45 +1,51 @@
 import streamlit as st
-import matplotlib.pyplot as plt
-from utils import predict_next, count_results, make_trend_chart
+from sklearn.ensemble import RandomForestClassifier
 
-# 頁面設定
-st.set_page_config(page_title="百家樂預測器", layout="centered")
+st.set_page_config(page_title="百家樂 AI 預測", layout="centered")
+st.title("🎲 百家樂 AI 預測器 v1.1")
+st.markdown("透過 AI 預測下一局是「莊」還是「閒」，點選下方按鈕開始輸入：")
 
-# Session 儲存
+# 儲存歷史資料
 if "history" not in st.session_state:
     st.session_state.history = []
 
-st.title("🔮 百家樂預測器（升級版）")
-st.markdown("請輸入歷史結果（B = 莊，P = 閒），用逗號分隔。例如：`B,P,B,P,B`")
+# 操作按鈕
+col1, col2, col3 = st.columns(3)
+with col1:
+    if st.button("🟥 莊 (B)"):
+        st.session_state.history.append("B")
+with col2:
+    if st.button("🟦 閒 (P)"):
+        st.session_state.history.append("P")
+with col3:
+    if st.button("🔄 清除"):
+        st.session_state.history = []
 
-# 輸入欄位
-input_text = st.text_input("歷史結果輸入", value="")
+# 顯示目前輸入資料
+history = st.session_state.history
+st.markdown(f"### 🎯 當前紀錄：{' → '.join(history) if history else '尚未輸入'}")
 
-if input_text:
-    history = [x.strip().upper() for x in input_text.split(',') if x.strip().upper() in ['B', 'P']]
-    st.session_state.history = history
+# AI 模型預測
+LOOKBACK = 8
+if st.button("🔍 預測下一局") and len(history) >= LOOKBACK + 1:
+    X, y = [], []
+    for i in range(LOOKBACK, len(history)):
+        feature = [1 if x == 'B' else 0 for x in history[i - LOOKBACK:i]]
+        label = 1 if history[i] == 'B' else 0
+        X.append(feature)
+        y.append(label)
 
-if st.session_state.history:
-    history = st.session_state.history
-    st.write("📘 歷史紀錄：", history)
+    model = RandomForestClassifier(n_estimators=200, random_state=42)
+    model.fit(X, y)
 
-    # 統計資訊
-    count_B, count_P, ratio_B, ratio_P = count_results(history)
-    st.markdown("🧮 莊：{} 次（{:.1f}%）｜閒：{} 次（{:.1f}%）".format(count_B, ratio_B, count_P, ratio_P))
+    latest = history[-LOOKBACK:]
+    latest_feature = [1 if x == 'B' else 0 for x in latest]
+    prediction = model.predict([latest_feature])[0]
+    prob = model.predict_proba([latest_feature])[0]
 
-    # 預測與建議
-    prediction = predict_next(history)
-    st.subheader(f"🔮 {prediction}")
+    result = "🟥 莊 (B)" if prediction == 1 else "🟦 閒 (P)"
+    st.success(f"✅ 預測下一局為：**{result}**")
+    st.markdown(f"📊 機率：莊 `{prob[1]:.2f}`，閒 `{prob[0]:.2f}`")
 
-    # 趨勢圖表
-    st.markdown("📈 出現趨勢：")
-    fig = make_trend_chart(history)
-    st.pyplot(fig)
-
-    # 下注建議
-    if len(history) >= 2 and history[-1] == history[-2]:
-        st.info("提示：出現連續結果，考慮使用『反跳』策略，小注相反方。")
-    elif len(set(history[-3:])) == 1:
-        st.info("提示：連出三次相同結果，可考慮追打。")
-    else:
-        st.info("提示：建議觀察再下注，避免進場時機錯誤。")
+elif len(history) < LOOKBACK + 1:
+    st.info(f"請至少輸入 {LOOKBACK + 1} 局資料。")
