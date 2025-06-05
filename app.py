@@ -1,15 +1,16 @@
 import streamlit as st
 from sklearn.ensemble import RandomForestClassifier
 
-st.set_page_config(page_title="百家樂 AI 預測", layout="centered")
+# 頁面設定
+st.set_page_config(page_title="百家樂 AI 預測器", layout="centered")
 st.title("🎲 百家樂 AI 預測器 v1.1")
-st.markdown("透過 AI 預測下一局是「莊」還是「閒」，點選下方按鈕開始輸入：")
+st.markdown("請點選下方按鈕輸入歷史結果，然後按下「預測下一局」")
 
-# 儲存歷史資料
+# 儲存輸入紀錄
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# 操作按鈕
+# 按鈕輸入區
 col1, col2, col3 = st.columns(3)
 with col1:
     if st.button("🟥 莊 (B)"):
@@ -21,31 +22,37 @@ with col3:
     if st.button("🔄 清除"):
         st.session_state.history = []
 
-# 顯示目前輸入資料
+# 顯示目前紀錄
 history = st.session_state.history
-st.markdown(f"### 🎯 當前紀錄：{' → '.join(history) if history else '尚未輸入'}")
+if history:
+    st.markdown(f"### 📋 當前紀錄：{' → '.join(history)}")
+else:
+    st.info("尚未輸入任何結果，請點選『莊』或『閒』輸入歷史資料。")
 
-# AI 模型預測
+# AI 模型預測區
 LOOKBACK = 8
-if st.button("🔍 預測下一局") and len(history) >= LOOKBACK + 1:
-    X, y = [], []
-    for i in range(LOOKBACK, len(history)):
-        feature = [1 if x == 'B' else 0 for x in history[i - LOOKBACK:i]]
-        label = 1 if history[i] == 'B' else 0
-        X.append(feature)
-        y.append(label)
+if st.button("🔍 預測下一局"):
 
-    model = RandomForestClassifier(n_estimators=200, random_state=42)
-    model.fit(X, y)
+    if len(history) < LOOKBACK + 1:
+        st.warning(f"請至少輸入 {LOOKBACK + 1} 局資料再進行預測。")
+    else:
+        # 準備資料
+        X, y = [], []
+        for i in range(LOOKBACK, len(history)):
+            feature = [1 if x == 'B' else 0 for x in history[i - LOOKBACK:i]]
+            label = 1 if history[i] == 'B' else 0
+            X.append(feature)
+            y.append(label)
 
-    latest = history[-LOOKBACK:]
-    latest_feature = [1 if x == 'B' else 0 for x in latest]
-    prediction = model.predict([latest_feature])[0]
-    prob = model.predict_proba([latest_feature])[0]
+        # 訓練模型
+        model = RandomForestClassifier(n_estimators=200, random_state=42)
+        model.fit(X, y)
 
-    result = "🟥 莊 (B)" if prediction == 1 else "🟦 閒 (P)"
-    st.success(f"✅ 預測下一局為：**{result}**")
-    st.markdown(f"📊 機率：莊 `{prob[1]:.2f}`，閒 `{prob[0]:.2f}`")
+        # 預測下一局
+        latest_feature = [1 if x == 'B' else 0 for x in history[-LOOKBACK:]]
+        prediction = model.predict([latest_feature])[0]
+        prob = model.predict_proba([latest_feature])[0]
 
-elif len(history) < LOOKBACK + 1:
-    st.info(f"請至少輸入 {LOOKBACK + 1} 局資料。")
+        result = "🟥 莊 (B)" if prediction == 1 else "🟦 閒 (P)"
+        st.success(f"✅ 預測下一局為：**{result}**")
+        st.markdown(f"📊 機率：莊 `{prob[1]:.2f}`，閒 `{prob[0]:.2f}`")
